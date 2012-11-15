@@ -105,7 +105,7 @@ namespace FragLabs.HTTP
         /// </summary>
         void SendHeaders()
         {
-            var extraHeaders = response.Producer.AdditionalHeaders();
+            var extraHeaders = response.Producer.AdditionalHeaders(request);
             if (extraHeaders != null && extraHeaders.Count > 0)
             {
                 foreach (var kvp in extraHeaders)
@@ -116,6 +116,8 @@ namespace FragLabs.HTTP
                     }
                 }
             }
+
+            response.Producer.BeforeHeaders(response);
 
             var disallowedHeaders = new string[] { "Server", "Connection" };
             foreach (var header in disallowedHeaders)

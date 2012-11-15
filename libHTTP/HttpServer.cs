@@ -166,6 +166,7 @@ namespace FragLabs.HTTP
                 reader.HttpError += ProcessHttpError;
                 reader.AsyncReadRequest();
             }
+            args.Dispose();
         }
 
         void ProcessHttpError(HttpStatusCode httpStatusCode, HttpRequest request)

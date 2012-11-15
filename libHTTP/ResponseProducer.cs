@@ -61,9 +61,17 @@ namespace FragLabs.HTTP
             IsDisposed = true;
         }
 
-        public virtual Dictionary<string, string> AdditionalHeaders()
+        public virtual Dictionary<string, string> AdditionalHeaders(HttpRequest request)
         {
             return null;
+        }
+
+        /// <summary>
+        /// Hook for modifying the http response before headers are sent.
+        /// </summary>
+        /// <param name="response"></param>
+        public virtual void BeforeHeaders(HttpResponse response)
+        {
         }
     }
 
@@ -88,7 +96,7 @@ namespace FragLabs.HTTP
             return ret;
         }
 
-        public override Dictionary<string, string> AdditionalHeaders()
+        public override Dictionary<string, string> AdditionalHeaders(HttpRequest request)
         {
             var ret = new Dictionary<string, string>();
             ret.Add("Content-Length", buffer.Length.ToString());
@@ -120,7 +128,7 @@ namespace FragLabs.HTTP
             backingStream.Dispose();
         }
 
-        public override Dictionary<string, string> AdditionalHeaders()
+        public override Dictionary<string, string> AdditionalHeaders(HttpRequest request)
         {
             long length = -1;
             try
@@ -198,29 +206,49 @@ namespace FragLabs.HTTP
             private set;
         }
 
+        public override void BeforeHeaders(HttpResponse response)
+        {
+            if (IsPartial)
+                response.StatusCode = HttpStatusCode.PartialContent;
+        }
+
         public override void Connect(HttpRequest request)
         {
             readBuffer = new byte[chunkSize];
             base.Connect(request);
-            ReadRangeHeader(request);
             stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
             stream.Seek(startOffset, SeekOrigin.Begin);
             currentOffset = startOffset;
         }
 
-        public override Dictionary<string, string> AdditionalHeaders()
+        public override Dictionary<string, string> AdditionalHeaders(HttpRequest request)
         {
+            ReadRangeHeader(request);
+
             var headers = new Dictionary<string, string>();
 
             headers.Add("Content-Type", ContentType());
             headers.Add("Content-Length", ContentLength());
             headers.Add("Accept-Ranges", "bytes");
 
+            if (IsPartial)
+            {
+                headers.Add("Content-Range", ContentRange());
+            }
+
             return headers;
         }
 
         public override bool ReadAsync(ProducerEventArgs e)
         {
+            if (endOffset - currentOffset < 1)
+            {
+                e.Buffer = null;
+                e.ByteCount = 0;
+                return false;
+            }
+            if (currentOffset + chunkSize >= endOffset)
+                readBuffer = new byte[endOffset - currentOffset];
             stream.BeginRead(readBuffer, 0, readBuffer.Length, new AsyncCallback(ReadCallback), e);
             return true;
         }
@@ -231,6 +259,7 @@ namespace FragLabs.HTTP
             var asyncArgs = (ProducerEventArgs)result.AsyncState;
             if (read > 0)
             {
+                currentOffset += read;
                 asyncArgs.Buffer = readBuffer;
                 asyncArgs.ByteCount = read;
                 asyncArgs.Complete(this);
@@ -279,7 +308,7 @@ namespace FragLabs.HTTP
 
         public string ContentType()
         {
-            return "video/x-matroska";
+            return "video/mp4";
         }
 
         public string ContentLength()

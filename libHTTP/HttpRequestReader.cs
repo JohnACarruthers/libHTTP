@@ -119,6 +119,11 @@ namespace FragLabs.HTTP
         {
             if (args.SocketError == SocketError.Success && args.BytesTransferred > 0)
             {
+                //  disposing prevents memory leaks
+                args.Dispose();
+                asyncArgs = new SocketAsyncEventArgs();
+                asyncArgs.SetBuffer(new byte[bufferSize], 0, bufferSize);
+                asyncArgs.Completed += ProcessRecv;
                 requestText += Encoding.UTF8.GetString(args.Buffer, 0, args.BytesTransferred);
                 ProcessRequestText();
                 if (!processingComplete)

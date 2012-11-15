@@ -46,9 +46,6 @@ namespace FragLabs.HTTP
         /// <param name="data"></param>
         void AsyncSend(byte[] data, int dataLen)
         {
-            //  todo: use global async args?
-            var asyncArgs = new SocketAsyncEventArgs();
-            asyncArgs.Completed += ProcessSend;
             asyncArgs.SetBuffer(data, 0, dataLen);
             if (!socket.SendAsync(asyncArgs))
                 ProcessSend(socket, asyncArgs);
@@ -63,6 +60,10 @@ namespace FragLabs.HTTP
         {
             if (e.SocketError == SocketError.Success)
             {
+                //  gotta dispose of the SocketAsyncEventArgs to prevent memory leaking like a sieve
+                e.Dispose();
+                asyncArgs = new SocketAsyncEventArgs();
+                asyncArgs.Completed += ProcessSend;
                 SendBody();
             }
             else
@@ -78,8 +79,11 @@ namespace FragLabs.HTTP
             if (Closed)
                 return;
 
+            asyncArgs.Dispose();
             response.Producer.Disconnect();
             response.Producer.Dispose();
+            response = null;
+            request = null;
             socket.Close();
             socket.Dispose();
             Closed = true;
@@ -132,17 +136,20 @@ namespace FragLabs.HTTP
             AsyncSend(data, data.Length);
         }
 
+        ProducerEventArgs produceAsyncArgs = new ProducerEventArgs();
         /// <summary>
         /// Sends the next part of the HTTP response body.
         /// </summary>
         void SendBody()
         {
             if (!response.Producer.Connected)
+            {
                 response.Producer.Connect(request);
-            var args = new ProducerEventArgs();
-            args.Completed += ProducerCallback;
-            if (!response.Producer.ReadAsync(args))
-                ProducerCallback(response.Producer, args);
+                produceAsyncArgs = new ProducerEventArgs();
+                produceAsyncArgs.Completed += ProducerCallback;
+            }
+            if (!response.Producer.ReadAsync(produceAsyncArgs))
+                ProducerCallback(response.Producer, produceAsyncArgs);
         }
 
         /// <summary>

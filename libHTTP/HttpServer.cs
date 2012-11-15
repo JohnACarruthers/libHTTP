@@ -28,6 +28,9 @@ namespace FragLabs.HTTP
         /// </summary>
         List<Socket> _serverSockets = new List<Socket>();
 
+        /// <summary>
+        /// Installed http modules.
+        /// </summary>
         List<IHttpModule> _modules = new List<IHttpModule>();
 
         /// <summary>
@@ -40,6 +43,8 @@ namespace FragLabs.HTTP
             _endpoints.AddRange(endpoints);
             IsDisposed = false;
             IsRunning = false;
+            //  default max request body size to 16MB
+            MaxBodySize = 16777216;
         }
 
         /// <summary>
@@ -161,7 +166,7 @@ namespace FragLabs.HTTP
             if (args.SocketError == SocketError.Success)
             {
                 var newClient = args.AcceptSocket;
-                var reader = new HttpRequestReader(newClient);
+                var reader = new HttpRequestReader(newClient, MaxBodySize);
                 reader.ReadComplete += ProcessRequest;
                 reader.HttpError += ProcessHttpError;
                 reader.AsyncReadRequest();
@@ -228,5 +233,10 @@ namespace FragLabs.HTTP
         /// Gets if the server is running.
         /// </summary>
         public bool IsRunning { get; private set; }
+
+        /// <summary>
+        /// Gets or sets the maximum allowable size for a request body.
+        /// </summary>
+        public int MaxBodySize { get; set; }
     }
 }

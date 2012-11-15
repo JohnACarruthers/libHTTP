@@ -40,6 +40,6 @@ namespace FragLabs.HTTP
         /// <summary>
         /// Request body, if any.
         /// </summary>
-        public string Body { get; set; }
+        public byte[] Body { get; set; }
     }
 }

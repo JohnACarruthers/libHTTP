@@ -55,6 +55,22 @@ namespace FragLabs.HTTP
         string requestText = "";
 
         /// <summary>
+        /// Current cursor position in the requestBodyEncoded array.
+        /// </summary>
+        int requestBodyWritePosition = 0;
+
+        /// <summary>
+        /// The encoded request body, if any.
+        /// </summary>
+        byte[] requestBodyEncoded = null;
+
+        /// <summary>
+        /// A buffer temporarily holding request body data that was received in the same packet as headers.
+        /// Most clients probably don't do this.
+        /// </summary>
+        byte[] recvOverflowBuffer = null;
+
+        /// <summary>
         /// HTTP request being read.
         /// </summary>
         HttpRequest request = null;
@@ -70,19 +86,25 @@ namespace FragLabs.HTTP
         ProcessingState processingState = ProcessingState.InitialLine;
 
         /// <summary>
+        /// Maximum size allowed for the request body.
+        /// </summary>
+        int MaxBodySize = 0;
+
+        /// <summary>
         /// Create a new request reader to read from the given socket.
         /// </summary>
         /// <param name="sock">Socket to read request from.</param>
-        public HttpRequestReader(Socket sock)
+        public HttpRequestReader(Socket sock, int MaxBodySize)
         {
             socket = sock;
+            this.MaxBodySize = MaxBodySize;
             asyncArgs = new SocketAsyncEventArgs();
             asyncArgs.SetBuffer(new byte[bufferSize], 0, bufferSize);
             asyncArgs.Completed += ProcessRecv;
             request = new HttpRequest()
             {
                 ClientSocket = sock,
-                Body = "",
+                Body = new byte[0],
                 Headers = new Dictionary<string,string>(),
                 Method = default(HttpMethod),
                 Uri = null,
@@ -124,16 +146,135 @@ namespace FragLabs.HTTP
                 asyncArgs = new SocketAsyncEventArgs();
                 asyncArgs.SetBuffer(new byte[bufferSize], 0, bufferSize);
                 asyncArgs.Completed += ProcessRecv;
-                requestText += Encoding.UTF8.GetString(args.Buffer, 0, args.BytesTransferred);
-                ProcessRequestText();
-                if (!processingComplete)
-                    SockRecv((Socket)sender);
+
+                if (processingState == ProcessingState.Body)
+                {
+                    for (int i = 0; i < args.BytesTransferred; i++)
+                    {
+                        if (requestBodyWritePosition == requestBodyEncoded.Length)
+                            break;
+                        requestBodyEncoded[requestBodyWritePosition++] = args.Buffer[i];
+                    }
+                    ProcessRequestBody();
+                    if (!processingComplete)
+                        SockRecv((Socket)sender);
+                }
+                else
+                {
+                    var bytesInHeader = PreProcessBuffer(args);
+                    requestText += Encoding.UTF8.GetString(args.Buffer, 0, bytesInHeader);
+                    ProcessRequestText();
+                    if (!processingComplete)
+                        SockRecv((Socket)sender);
+                }
             }
             else
             {
                 //  error, connection broken
                 processingComplete = true;
             }
+        }
+
+        /// <summary>
+        /// Examines the received buffer for termination of HTTP headers.
+        /// </summary>
+        /// <returns>Number of bytes that make up the received header text.</returns>
+        int PreProcessBuffer(SocketAsyncEventArgs args)
+        {
+            //  look in the buffer for CR+LF CR+LF OR LF LF that terminates headers
+            //  if found, trunicate the text to be processed and store extra data on the request body
+            int headerEnd = IndexOf(new byte[]{ 13, 10, 13, 10 }, args.Buffer);
+            if (headerEnd > -1) headerEnd += 4;
+            else
+            {
+                headerEnd = IndexOf(new byte[] { 10, 10 }, args.Buffer);
+                if (headerEnd > -1) headerEnd += 2;
+            }
+            if (headerEnd < 0)
+                return args.BytesTransferred;
+
+            //  copy data from the buffer if possible
+            if (headerEnd < args.BytesTransferred)
+            {
+                recvOverflowBuffer = new byte[args.BytesTransferred - headerEnd];
+                int index = 0;
+                for (int i = headerEnd; i < args.BytesTransferred; i++)
+                {
+                    recvOverflowBuffer[index++] = args.Buffer[i];
+                }
+            }
+
+            return headerEnd;
+        }
+
+        /// <summary>
+        /// Returns the index of the supplied pattern in the supplied data.
+        /// Returns -1 when not found.
+        /// </summary>
+        /// <param name="pattern"></param>
+        /// <param name="data"></param>
+        /// <returns></returns>
+        int IndexOf(byte[] pattern, byte[] data)
+        {
+            int ret = -1;
+
+            for (int i = 0; i < data.Length - pattern.Length; i++)
+            {
+                var matched = true;
+                for (int j = 0; j < pattern.Length; j++)
+                {
+                    if (data[i + j] != pattern[j])
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched)
+                {
+                    ret = i;
+                    break;
+                }
+            }
+
+            return ret;
+        }
+
+        void InitRequestBody()
+        {
+            int contentLength = 0;
+            if (!Int32.TryParse(request.Headers["Content-Length"], out contentLength) || contentLength > MaxBodySize)
+            {
+                ParsingError(HttpStatusCode.RequestEntityTooLarge);
+                return;
+            }
+
+            requestBodyEncoded = new byte[contentLength];
+
+            if (recvOverflowBuffer != null)
+            {
+                for (int i = 0; i < recvOverflowBuffer.Length; i++)
+                {
+                    requestBodyEncoded[i] = recvOverflowBuffer[i];
+                }
+                requestBodyWritePosition = recvOverflowBuffer.Length;
+            }
+
+            ProcessRequestBody();
+        }
+
+        void ProcessRequestBody()
+        {
+            if (processingComplete || processingState != ProcessingState.Body)
+                return;
+
+            if (requestBodyWritePosition < requestBodyEncoded.Length)
+                return;
+
+            request.Body = requestBodyEncoded;
+
+            processingComplete = true;
+            if (ReadComplete != null)
+                ReadComplete(request);
         }
 
         /// <summary>
@@ -189,6 +330,7 @@ namespace FragLabs.HTTP
                                 request.Headers.ContainsKey("Content-Length"))
                             {
                                 //  body required
+                                InitRequestBody();
                             }
                             else
                             {
@@ -198,10 +340,6 @@ namespace FragLabs.HTTP
                                     ReadComplete(request);
                             }
                         }
-                    }
-                    break;
-                case ProcessingState.Body:
-                    {
                     }
                     break;
             }

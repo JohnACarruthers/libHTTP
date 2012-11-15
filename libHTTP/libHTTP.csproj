@@ -48,6 +48,7 @@
     <Compile Include="HttpStatusCode.cs" />
     <Compile Include="IHttpModule.cs" />
     <Compile Include="Modules\HelloWorld.cs" />
+    <Compile Include="Modules\TestPost.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ResponseProducer.cs" />
   </ItemGroup>

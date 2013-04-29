@@ -6,10 +6,36 @@ using System.IO;
 
 namespace FragLabs.HTTP
 {
+    public interface IResponseProducer : IDisposable
+    {
+        /// <summary>
+        /// Gets if the producer has been connected.
+        /// </summary>
+        bool Connected { get; }
+
+        /// <summary>
+        /// Gets the http request.
+        /// </summary>
+        HttpRequest Request { get; }
+
+        void Connect(HttpRequest request);
+        void Disconnect();
+        bool ReadAsync(ProducerEventArgs e);
+        byte[] Read();
+        void Dispose();
+        Dictionary<string, string> AdditionalHeaders(HttpRequest request);
+
+        /// <summary>
+        /// Hook for modifying the http response before headers are sent.
+        /// </summary>
+        /// <param name="response"></param>
+        void BeforeHeaders(HttpResponse response);
+    }
+
     /// <summary>
     /// An HTTP response producer.
     /// </summary>
-    public abstract class ResponseProducer : IDisposable
+    public abstract class ResponseProducer : IResponseProducer
     {
         /// <summary>
         /// Gets if the producer has been connected.

@@ -13,7 +13,7 @@ namespace FragLabs.HTTP
         /// <summary>
         /// Response producer used to produce data to send to the client.
         /// </summary>
-        public ResponseProducer Producer { get; set; }
+        public IResponseProducer Producer { get; set; }
 
         /// <summary>
         /// HTTP status code.

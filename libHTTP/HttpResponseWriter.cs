@@ -85,7 +85,6 @@ namespace FragLabs.HTTP
             response = null;
             request = null;
             socket.Close();
-            socket.Dispose();
             Closed = true;
         }
 

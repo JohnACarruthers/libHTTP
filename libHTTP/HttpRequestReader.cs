@@ -356,7 +356,11 @@ namespace FragLabs.HTTP
                 return;
             }
             HttpMethod method;
-            if (!Enum.TryParse<HttpMethod>(bits[0], true, out method))
+            try
+            {
+                method = (HttpMethod)Enum.Parse(typeof(HttpMethod), bits[0], true);
+            }
+            catch
             {
                 ParsingError(HttpStatusCode.BadRequest);
                 return;

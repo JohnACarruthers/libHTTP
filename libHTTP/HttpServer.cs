@@ -122,7 +122,6 @@ namespace FragLabs.HTTP
                 foreach (var socket in _serverSockets)
                 {
                     socket.Close();
-                    socket.Dispose();
                 }
                 _serverSockets = null;
                 IsRunning = false;

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
@@ -122,7 +121,6 @@ namespace FragLabs.HTTP
                 foreach (var socket in _serverSockets)
                 {
                     socket.Close();
-                    socket.Dispose();
                 }
                 _serverSockets = null;
                 IsRunning = false;

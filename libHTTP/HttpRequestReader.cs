@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
@@ -356,7 +355,11 @@ namespace FragLabs.HTTP
                 return;
             }
             HttpMethod method;
-            if (!Enum.TryParse<HttpMethod>(bits[0], true, out method))
+            try
+            {
+                method = (HttpMethod)Enum.Parse(typeof(HttpMethod), bits[0], true);
+            }
+            catch
             {
                 ParsingError(HttpStatusCode.BadRequest);
                 return;

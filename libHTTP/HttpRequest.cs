@@ -10,8 +10,13 @@ namespace FragLabs.HTTP
     /// <summary>
     /// An HTTP request.
     /// </summary>
-    public class HttpRequest
+    public class HttpRequest : MarshalByRefObject
     {
+        public override object InitializeLifetimeService()
+        {
+            return null;
+        }
+
         /// <summary>
         /// Socket connected to the HTTP client.
         /// </summary>
